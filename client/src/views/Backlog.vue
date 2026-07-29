@@ -113,6 +113,7 @@ export default {
     const loadBacklog = async () => {
       try {
         loading.value = true
+        error.value = null
         const filters = getCurrentFilters()
 
         const [backlogData, inventoryData] = await Promise.all([
