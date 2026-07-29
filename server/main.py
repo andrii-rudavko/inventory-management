@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel
+from datetime import datetime, timedelta
 from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders
 
 app = FastAPI(title="Factory Inventory Management System")
@@ -119,6 +120,38 @@ class CreatePurchaseOrderRequest(BaseModel):
     unit_cost: float
     expected_delivery_date: str
     notes: Optional[str] = None
+
+class RestockingRecommendation(BaseModel):
+    item_sku: str
+    item_name: str
+    trend: str
+    current_demand: int
+    forecasted_demand: int
+    restock_quantity: int
+    unit_cost: float
+    lead_time_days: int
+    estimated_cost: float
+
+class RestockingOrderItem(BaseModel):
+    item_sku: str
+    item_name: str
+    quantity: int
+    unit_cost: float
+    lead_time_days: int
+
+class SubmitRestockingOrderRequest(BaseModel):
+    budget: float
+    items: List[RestockingOrderItem]
+
+class RestockingOrder(BaseModel):
+    id: str
+    budget: float
+    total_cost: float
+    items: List[RestockingOrderItem]
+    status: str
+    submitted_date: str
+    expected_delivery_date: str
+    lead_time_days: int
 
 # API endpoints
 @app.get("/")
@@ -303,6 +336,81 @@ def get_monthly_trends():
     result = list(months.values())
     result.sort(key=lambda x: x['month'])
     return result
+
+
+# Supplier catalog for demand-forecast SKUs: unit cost + typical supplier lead time (days).
+# Demand forecast items are sourced from a separate supplier catalog and don't always
+# overlap with warehouse inventory SKUs, so costs/lead times are tracked here.
+RESTOCKING_CATALOG = {
+    'WDG-001': {'unit_cost': 45.00, 'lead_time_days': 7},
+    'BRG-102': {'unit_cost': 32.00, 'lead_time_days': 5},
+    'GSK-203': {'unit_cost': 12.00, 'lead_time_days': 10},
+    'MTR-304': {'unit_cost': 210.00, 'lead_time_days': 6},
+    'FLT-405': {'unit_cost': 28.00, 'lead_time_days': 12},
+    'VLV-506': {'unit_cost': 85.00, 'lead_time_days': 8},
+    'PSU-501': {'unit_cost': 18.99, 'lead_time_days': 4},
+    'SNR-420': {'unit_cost': 65.00, 'lead_time_days': 9},
+    'CTL-330': {'unit_cost': 150.00, 'lead_time_days': 14},
+}
+
+restocking_orders: List[dict] = []
+
+@app.get("/api/restocking/recommendations", response_model=List[RestockingRecommendation])
+def get_restocking_recommendations():
+    """Recommend items to restock based on demand forecast gaps (forecasted > current demand)"""
+    recommendations = []
+    for forecast in demand_forecasts:
+        gap = forecast["forecasted_demand"] - forecast["current_demand"]
+        if gap <= 0:
+            continue
+        catalog_entry = RESTOCKING_CATALOG.get(forecast["item_sku"], {'unit_cost': 50.0, 'lead_time_days': 10})
+        recommendations.append({
+            "item_sku": forecast["item_sku"],
+            "item_name": forecast["item_name"],
+            "trend": forecast["trend"],
+            "current_demand": forecast["current_demand"],
+            "forecasted_demand": forecast["forecasted_demand"],
+            "restock_quantity": gap,
+            "unit_cost": catalog_entry["unit_cost"],
+            "lead_time_days": catalog_entry["lead_time_days"],
+            "estimated_cost": round(gap * catalog_entry["unit_cost"], 2)
+        })
+
+    # Highest restock quantity gap first
+    recommendations.sort(key=lambda r: r["restock_quantity"], reverse=True)
+    return recommendations
+
+@app.get("/api/restocking/orders", response_model=List[RestockingOrder])
+def get_restocking_orders():
+    """Get all submitted restocking orders"""
+    return restocking_orders
+
+@app.post("/api/restocking/orders", response_model=RestockingOrder, status_code=201)
+def submit_restocking_order(request: SubmitRestockingOrderRequest):
+    """Submit a budget-based restocking order"""
+    if not request.items:
+        raise HTTPException(status_code=400, detail="At least one item is required")
+
+    total_cost = round(sum(item.quantity * item.unit_cost for item in request.items), 2)
+    if total_cost > request.budget:
+        raise HTTPException(status_code=400, detail="Total cost exceeds budget")
+
+    max_lead_time = max(item.lead_time_days for item in request.items)
+    submitted_date = datetime.now().date()
+    expected_delivery = submitted_date + timedelta(days=max_lead_time)
+
+    order = {
+        "id": f"RO-{len(restocking_orders) + 1:04d}",
+        "budget": request.budget,
+        "total_cost": total_cost,
+        "items": [item.model_dump() for item in request.items],
+        "status": "Submitted",
+        "submitted_date": submitted_date.isoformat(),
+        "expected_delivery_date": expected_delivery.isoformat(),
+        "lead_time_days": max_lead_time
+    }
+    restocking_orders.append(order)
+    return order
 
 if __name__ == "__main__":
     import uvicorn
