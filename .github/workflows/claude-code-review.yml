@@ -22,6 +22,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
+          show_full_output: true
           prompt: |
             Please review this pull request and provide feedback on:
             - Code quality and adherence to project conventions (see CLAUDE.md)
@@ -29,4 +31,5 @@ jobs:
             - Performance considerations
             - Security concerns
 
-            Be concise and focus on actionable feedback.
+            Be concise and focus on actionable feedback. Post your review as a
+            comment on this pull request.
