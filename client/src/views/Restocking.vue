@@ -86,13 +86,14 @@
           </div>
           <button
             class="place-order-btn"
-            :disabled="selectedItems.length === 0 || submitting"
+            :disabled="selectedItems.length === 0 || submitting || remainingBudget < 0"
             @click="placeOrder"
           >
             {{ submitting ? t('restocking.placingOrder') : t('restocking.placeOrder') }}
           </button>
         </div>
 
+        <div v-if="submitError" class="error submit-error">{{ submitError }}</div>
         <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
       </div>
     </div>
@@ -100,7 +101,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { api } from '../api'
 import { useI18n } from '../composables/useI18n'
 
@@ -121,10 +122,12 @@ export default {
     const maxBudget = ref(20000)
     const submitting = ref(false)
     const successMessage = ref(null)
+    const submitError = ref(null)
 
     const loadRecommendations = async () => {
       try {
         loading.value = true
+        error.value = null
         recommendations.value = await api.getRestockingRecommendations()
       } catch (err) {
         error.value = 'Failed to load restocking recommendations: ' + err.message
@@ -174,6 +177,7 @@ export default {
       if (selectedItems.value.length === 0) return
       submitting.value = true
       successMessage.value = null
+      submitError.value = null
       try {
         await api.submitRestockingOrder({
           budget: budget.value,
@@ -188,11 +192,13 @@ export default {
         successMessage.value = t('restocking.orderSuccess')
         selectedSkus.value = new Set()
       } catch (err) {
-        error.value = 'Failed to submit restocking order: ' + err.message
+        submitError.value = 'Failed to submit restocking order: ' + err.message
       } finally {
         submitting.value = false
       }
     }
+
+    watch(budget, autoSelectByBudget)
 
     onMounted(async () => {
       await loadRecommendations()
@@ -215,6 +221,7 @@ export default {
       placeOrder,
       submitting,
       successMessage,
+      submitError,
       currencySymbol
     }
   }
@@ -316,6 +323,10 @@ tr.selected {
 .place-order-btn:disabled {
   background: #cbd5e1;
   cursor: not-allowed;
+}
+
+.submit-error {
+  margin-top: 1rem;
 }
 
 .success-message {
