@@ -141,11 +141,13 @@ export default {
     const quarterlyData = ref([])
     const monthlyData = ref([])
 
+    // Order Status is intentionally excluded here: the reports endpoints
+    // don't accept a status filter (see api.js) since it would make
+    // fulfillment_rate collapse to a meaningless 100%/0%.
     const {
       selectedPeriod,
       selectedLocation,
       selectedCategory,
-      selectedStatus,
       getCurrentFilters
     } = useFilters()
 
@@ -232,7 +234,7 @@ export default {
       return `${sign}${rate.toFixed(1)}%`
     }
 
-    watch([selectedPeriod, selectedLocation, selectedCategory, selectedStatus], () => {
+    watch([selectedPeriod, selectedLocation, selectedCategory], () => {
       loadData()
     })
 
