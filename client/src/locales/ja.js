@@ -8,6 +8,7 @@ export default {
     demandForecast: '需要予測',
     restocking: '再入荷',
     reports: 'レポート',
+    backlog: 'バックログ',
     companyName: '触媒コンポーネンツ',
     subtitle: '在庫管理システム'
   },
@@ -167,6 +168,18 @@ export default {
     placingOrder: '注文中...',
     orderSuccess: '注文が提出されました。配達詳細は注文タブでご確認ください。',
     noRecommendations: '現在、再入荷が必要なアイテムはありません。'
+  },
+
+  // Backlog
+  backlog: {
+    title: 'バックログ管理',
+    description: '在庫不足を追跡し解決する',
+    highPriority: '優先度：高',
+    mediumPriority: '優先度：中',
+    lowPriority: '優先度：低',
+    totalItems: '総バックログ件数',
+    itemsTitle: 'バックログアイテム',
+    noItems: 'バックログアイテムはありません - すべての注文を履行できます！'
   },
 
   // Reports
